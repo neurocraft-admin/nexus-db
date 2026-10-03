@@ -3,7 +3,8 @@ DO $$
 DECLARE
     v_name text;
 BEGIN
-    FOREACH v_name IN ARRAY ARRAY['00_deployment_log.sql', '01_foundation_schema.sql', '02_foundation_seed.sql'] LOOP
+    FOREACH v_name IN ARRAY ARRAY['00_deployment_log.sql', '01_foundation_schema.sql', '02_foundation_seed.sql',
+                                  '03_foundation_grants.sql'] LOOP
         IF NOT EXISTS (SELECT 1 FROM deployment_log d WHERE d.script_name = v_name) THEN
             RAISE EXCEPTION 'Script not applied: %', v_name;
         END IF;
