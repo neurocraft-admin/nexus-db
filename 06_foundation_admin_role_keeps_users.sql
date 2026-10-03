@@ -1,9 +1,28 @@
--- p_permissions is a JSON array of
---   {"resourceId":1,"canView":true,"canCreate":false,"canUpdate":false,"canDelete":false}
--- Permissions and menu_access change together so the sidebar always matches can_view.
--- Menu items with no resource (such as group headings) are only added, never removed here.
--- Saving the Admin role goes through fn_check_admin_role_permissions first (roles and users stay manageable).
--- Kept in sync with 06_foundation_admin_role_keeps_users.sql.
+-- The Admin role must keep view and update on users as well as roles (it already kept roles).
+-- Re-runnable (CREATE OR REPLACE; no signature changes). The same definitions live in
+-- StoredProcedures/Foundation/fn_check_admin_role_permissions.sql and sp_save_role_permissions.sql - keep them in sync.
+
+CREATE OR REPLACE FUNCTION fn_check_admin_role_permissions(p_tenant_id integer, p_permissions jsonb)
+RETURNS void
+LANGUAGE plpgsql AS $$
+DECLARE
+    c_required_resources CONSTANT text[] := ARRAY['roles', 'users'];
+    v_resource text;
+BEGIN
+    FOREACH v_resource IN ARRAY c_required_resources LOOP
+        IF NOT EXISTS (
+            SELECT 1
+              FROM jsonb_to_recordset(p_permissions)
+                   AS j("resourceId" integer, "canView" boolean, "canUpdate" boolean)
+              JOIN resources x ON x.resource_id = j."resourceId" AND x.tenant_id = p_tenant_id
+             WHERE x.resource_code = v_resource AND j."canView" AND j."canUpdate") THEN
+            RAISE EXCEPTION 'The Admin role must keep view and update on roles and users'
+                USING ERRCODE = 'NX409';
+        END IF;
+    END LOOP;
+END;
+$$;
+
 CREATE OR REPLACE PROCEDURE sp_save_role_permissions(
     p_tenant_id integer, p_role_id integer, p_permissions jsonb)
 LANGUAGE plpgsql AS $$
@@ -51,3 +70,6 @@ BEGIN
     ON CONFLICT (role_id, menu_item_id) DO NOTHING;
 END;
 $$;
+
+INSERT INTO deployment_log (script_name) VALUES ('06_foundation_admin_role_keeps_users.sql')
+ON CONFLICT DO NOTHING;
