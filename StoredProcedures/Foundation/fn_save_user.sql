@@ -1,5 +1,7 @@
 -- p_password_hash is used only when creating; an existing password changes through
 -- sp_reset_user_password or sp_change_password. Duplicate user names surface as 23505.
+-- Editing an existing user goes through fn_check_admin_demotion first (last-admin guard, NX409).
+-- Kept in sync with 04_foundation_last_admin_guard.sql.
 CREATE OR REPLACE FUNCTION fn_save_user(
     p_tenant_id integer, p_user_id integer,
     p_user_name varchar, p_full_name varchar, p_mobile varchar,
@@ -19,6 +21,7 @@ BEGIN
         VALUES (p_tenant_id, p_user_name, p_full_name, p_mobile, p_password_hash, p_role_id, p_user_type)
         RETURNING users.user_id INTO v_user_id;
     ELSE
+        PERFORM fn_check_admin_demotion(p_tenant_id, p_user_id, p_user_type, p_role_id);
         UPDATE users
            SET user_name = p_user_name, full_name = p_full_name, mobile = p_mobile,
                role_id = p_role_id, user_type = p_user_type, updated_at = now()
