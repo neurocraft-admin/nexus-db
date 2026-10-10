@@ -5,7 +5,8 @@ DECLARE
 BEGIN
     FOREACH v_name IN ARRAY ARRAY['00_deployment_log.sql', '01_foundation_schema.sql', '02_foundation_seed.sql',
                                   '03_foundation_grants.sql', '04_foundation_last_admin_guard.sql', '05_foundation_user_by_id.sql',
-                                  '06_foundation_admin_role_keeps_users.sql'] LOOP
+                                  '06_foundation_admin_role_keeps_users.sql',
+                                  '07_foundation_split_role_permission_save.sql'] LOOP
         IF NOT EXISTS (SELECT 1 FROM deployment_log d WHERE d.script_name = v_name) THEN
             RAISE EXCEPTION 'Script not applied: %', v_name;
         END IF;
@@ -21,7 +22,7 @@ BEGIN
     FOREACH v_name IN ARRAY ARRAY['fn_get_user_for_login', 'sp_record_login_success', 'sp_record_login_failure',
             'fn_get_user_permissions', 'fn_get_menu_for_user', 'fn_next_document_no', 'fn_get_setting',
             'fn_get_users', 'fn_save_user', 'fn_set_user_active', 'sp_reset_user_password', 'sp_change_password',
-            'fn_check_admin_demotion', 'fn_get_user_by_id', 'fn_check_admin_role_permissions', 'fn_get_roles', 'fn_save_role', 'fn_get_role_permissions', 'sp_save_role_permissions'] LOOP
+            'fn_check_admin_demotion', 'fn_get_user_by_id', 'fn_check_admin_role_permissions', 'sp_sync_role_menu_access', 'fn_get_roles', 'fn_save_role', 'fn_get_role_permissions', 'sp_save_role_permissions'] LOOP
         IF NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
                         WHERE n.nspname = 'public' AND p.proname = v_name) THEN
             RAISE EXCEPTION 'Function missing: %', v_name;
