@@ -49,8 +49,11 @@ Get-ChildItem StoredProcedures -Recurse -Filter *.sql | Sort-Object FullName | F
     if ($LASTEXITCODE -ne 0) { throw "Failed: $($_.Name)" }
 }
 
-# 3. Verify (raises an error if a script, table or function is missing)
-Get-Content -Raw verify\verify_foundation.sql | docker exec -i $container psql -U postgres -d $db -v ON_ERROR_STOP=1
+# 3. Verify, every module's verify script (raises an error if a script, table or function is missing)
+Get-ChildItem verify -Filter *.sql | Sort-Object Name | ForEach-Object {
+    Get-Content -Raw $_.FullName | docker exec -i $container psql -U postgres -d $db -v ON_ERROR_STOP=1
+    if ($LASTEXITCODE -ne 0) { throw "Verification failed: $($_.Name)" }
+}
 
 # 4. Check: there must be one row for every NN_*.sql file in this folder
 docker exec $container psql -U postgres -d $db -c "SELECT script_name, applied_at FROM deployment_log ORDER BY script_name"
