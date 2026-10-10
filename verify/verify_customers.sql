@@ -25,6 +25,9 @@ BEGIN
         END IF;
     END LOOP;
 
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_customers_mobile') THEN
+        RAISE EXCEPTION 'Constraint missing: ck_customers_mobile';
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM resources WHERE resource_code = 'customers') THEN
         RAISE EXCEPTION 'Resource missing: customers';
     END IF;
