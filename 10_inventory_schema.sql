@@ -7,6 +7,12 @@
 --   * quantity is always positive; signed_quantity carries the effect on stock (in = +, out = -, adjust = either).
 --     The ledger reconciles with SUM(signed_quantity) per item = items.current_stock (see vw_item_stock_check).
 --   * An adjustment must carry a note.
+-- Rounding rule for money (the API and the database use the same one): each purchase line is
+-- round(quantity * unit_cost, 2), half away from zero (PostgreSQL numeric rounding; the API uses
+-- MidpointRounding.AwayFromZero), and the purchase total is the SUM of the rounded lines, never the rounded sum
+-- of the unrounded products. ck_purchase_lines_total makes a line that breaks the rule impossible to store.
+-- unit_cost has at most 2 decimals and quantity at most 3; sp_check_purchase_lines refuses more instead of
+-- letting the column round them silently.
 -- Custom SQLSTATEs used by the functions in StoredProcedures/Inventory (the API maps both to 409):
 --   NX409 rule conflict (inactive item or supplier), NX411 insufficient stock.
 
@@ -93,6 +99,16 @@ CREATE TABLE IF NOT EXISTS purchase_lines (
     CONSTRAINT ck_purchase_lines_quantity CHECK (quantity > 0),
     CONSTRAINT ck_purchase_lines_cost CHECK (unit_cost >= 0)
 );
+
+-- A database that ran an earlier version of this script has the table but not the line-total rule.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_purchase_lines_total') THEN
+        ALTER TABLE purchase_lines
+            ADD CONSTRAINT ck_purchase_lines_total CHECK (line_total = round(quantity * unit_cost, 2));
+    END IF;
+END;
+$$;
 
 CREATE INDEX IF NOT EXISTS ix_purchase_lines_item_id ON purchase_lines (item_id);
 

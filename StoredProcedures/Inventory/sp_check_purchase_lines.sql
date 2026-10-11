@@ -2,7 +2,8 @@
 -- {"itemId": 1, "quantity": 2.5, "unitCost": 10.00}. Item rows are locked FOR UPDATE in item_id order, so two
 -- purchases that share items cannot deadlock by locking them in a different order. Called inside
 -- sp_record_purchase's transaction.
---   22023 invalid parameter - no lines, a missing or non-positive quantity, a negative cost, or an item twice
+--   22023 invalid parameter - no lines, a missing or non-positive quantity, a negative cost, more than 3
+--                             decimals of quantity or more than 2 of unit cost, or an item twice
 --   P0002 not found         - an item that does not exist
 --   NX409 rule conflict     - an inactive item
 CREATE OR REPLACE PROCEDURE sp_check_purchase_lines(p_tenant_id integer, p_lines jsonb)
@@ -21,6 +22,10 @@ BEGIN
                    OR l."unitCost" IS NULL OR l."unitCost" < 0) THEN
         RAISE EXCEPTION 'Each line needs an item, a quantity above zero and a cost of zero or more'
             USING ERRCODE = '22023';
+    END IF;
+    IF EXISTS (SELECT 1 FROM jsonb_to_recordset(p_lines) AS l ("itemId" bigint, quantity numeric, "unitCost" numeric)
+                WHERE l.quantity <> round(l.quantity, 3) OR l."unitCost" <> round(l."unitCost", 2)) THEN
+        RAISE EXCEPTION 'Quantity can have at most 3 decimals and unit cost at most 2' USING ERRCODE = '22023';
     END IF;
     IF (SELECT count(DISTINCT l."itemId") FROM jsonb_to_recordset(p_lines) AS l ("itemId" bigint)) <> v_lines THEN
         RAISE EXCEPTION 'An item can appear only once in a purchase' USING ERRCODE = '22023';

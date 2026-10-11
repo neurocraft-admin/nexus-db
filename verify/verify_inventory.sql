@@ -38,7 +38,8 @@ BEGIN
         END IF;
     END LOOP;
     FOREACH v_name IN ARRAY ARRAY['ck_items_stock_not_negative', 'ck_stock_movements_quantity',
-                                  'ck_stock_movements_direction', 'ck_stock_movements_adjust_note'] LOOP
+                                  'ck_stock_movements_direction', 'ck_stock_movements_adjust_note',
+                                  'ck_purchase_lines_total'] LOOP
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = v_name) THEN
             RAISE EXCEPTION 'Constraint missing: %', v_name;
         END IF;
@@ -66,6 +67,13 @@ BEGIN
             RAISE EXCEPTION 'Menu item missing: %', v_name;
         END IF;
     END LOOP;
+
+    -- Money rule: a purchase total is the sum of its rounded lines.
+    IF EXISTS (SELECT 1 FROM purchases p
+                WHERE p.total_amount <> COALESCE((SELECT sum(pl.line_total) FROM purchase_lines pl
+                                                   WHERE pl.purchase_id = p.purchase_id), 0)) THEN
+        RAISE EXCEPTION 'A purchase total does not equal the sum of its lines';
+    END IF;
 
     -- The ledger must always agree with the running stock.
     IF EXISTS (SELECT 1 FROM vw_item_stock_check WHERE difference <> 0) THEN
