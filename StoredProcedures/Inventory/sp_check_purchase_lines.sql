@@ -41,10 +41,7 @@ BEGIN
         END IF;
     END LOOP;
     IF v_locked <> jsonb_array_length(p_lines) THEN
-        RAISE EXCEPTION 'One or more items were not found: %', (
-            SELECT string_agg(l."itemId"::text, ', ' ORDER BY l."itemId")
-              FROM jsonb_to_recordset(p_lines) AS l ("itemId" bigint)
-             WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.tenant_id = p_tenant_id AND i.item_id = l."itemId"))
+        RAISE EXCEPTION 'One or more items were not found: %', fn_missing_item_ids(p_tenant_id, p_lines)
             USING ERRCODE = 'P0002', COLUMN = 'lines';
     END IF;
 END;

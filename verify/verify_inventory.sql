@@ -7,7 +7,7 @@ DECLARE
         'fn_get_units', 'fn_get_items', 'fn_get_item_by_id', 'fn_save_item', 'fn_set_item_active',
         'fn_get_low_stock_items', 'fn_get_suppliers', 'fn_get_supplier_by_id', 'fn_save_supplier',
         'fn_set_supplier_active', 'sp_stock_in', 'sp_stock_out', 'sp_adjust_stock', 'fn_check_purchase_header',
-        'sp_check_purchase_lines', 'sp_add_purchase_lines', 'sp_record_purchase', 'fn_get_purchases', 'fn_get_purchase_by_id', 'fn_get_purchase_lines',
+        'sp_check_purchase_lines', 'fn_missing_item_ids', 'sp_add_purchase_lines', 'sp_record_purchase', 'fn_get_purchases', 'fn_get_purchase_by_id', 'fn_get_purchase_lines',
         'fn_get_stock_movements', 'fn_block_stock_movement_change'];
 BEGIN
     FOREACH v_name IN ARRAY ARRAY['10_inventory_schema.sql', '11_inventory_menu.sql'] LOOP
