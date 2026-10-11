@@ -13,10 +13,10 @@ DECLARE
     v_cost  numeric;
 BEGIN
     IF p_quantity_change IS NULL OR p_quantity_change = 0 THEN
-        RAISE EXCEPTION 'The adjustment cannot be zero' USING ERRCODE = '22023';
+        RAISE EXCEPTION 'The adjustment cannot be zero' USING ERRCODE = '22023', COLUMN = 'quantityChange';
     END IF;
     IF length(btrim(coalesce(p_note, ''))) = 0 THEN
-        RAISE EXCEPTION 'A note is required for a stock adjustment' USING ERRCODE = '22023';
+        RAISE EXCEPTION 'A note is required for a stock adjustment' USING ERRCODE = '22023', COLUMN = 'note';
     END IF;
 
     SELECT i.item_code, i.current_stock, i.cost_price INTO v_code, v_stock, v_cost
@@ -24,11 +24,11 @@ BEGIN
      WHERE i.item_id = p_item_id AND i.tenant_id = p_tenant_id
        FOR UPDATE;
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Item % not found', p_item_id USING ERRCODE = 'P0002';
+        RAISE EXCEPTION 'Item % not found', p_item_id USING ERRCODE = 'P0002', COLUMN = 'itemId';
     END IF;
     IF v_stock + p_quantity_change < 0 THEN
         RAISE EXCEPTION 'Insufficient stock for item %: available %, requested %', v_code, v_stock, -p_quantity_change
-            USING ERRCODE = 'NX411';
+            USING ERRCODE = 'NX411', COLUMN = 'quantityChange';
     END IF;
 
     INSERT INTO stock_movements (tenant_id, item_id, movement_type, quantity, signed_quantity, unit_cost,

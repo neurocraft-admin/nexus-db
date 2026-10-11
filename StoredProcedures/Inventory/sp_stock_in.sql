@@ -13,10 +13,10 @@ DECLARE
     v_active boolean;
 BEGIN
     IF p_quantity IS NULL OR p_quantity <= 0 THEN
-        RAISE EXCEPTION 'Quantity must be above zero' USING ERRCODE = '22023';
+        RAISE EXCEPTION 'Quantity must be above zero' USING ERRCODE = '22023', COLUMN = 'quantity';
     END IF;
     IF p_unit_cost IS NULL OR p_unit_cost < 0 THEN
-        RAISE EXCEPTION 'Unit cost cannot be negative' USING ERRCODE = '22023';
+        RAISE EXCEPTION 'Unit cost cannot be negative' USING ERRCODE = '22023', COLUMN = 'unitCost';
     END IF;
 
     SELECT i.item_code, i.is_active INTO v_code, v_active
@@ -24,10 +24,10 @@ BEGIN
      WHERE i.item_id = p_item_id AND i.tenant_id = p_tenant_id
        FOR UPDATE;
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Item % not found', p_item_id USING ERRCODE = 'P0002';
+        RAISE EXCEPTION 'Item % not found', p_item_id USING ERRCODE = 'P0002', COLUMN = 'itemId';
     END IF;
     IF NOT v_active THEN
-        RAISE EXCEPTION 'Item % is inactive', v_code USING ERRCODE = 'NX409';
+        RAISE EXCEPTION 'Item % is inactive', v_code USING ERRCODE = 'NX409', COLUMN = 'itemId';
     END IF;
 
     INSERT INTO stock_movements (tenant_id, item_id, movement_type, quantity, signed_quantity, unit_cost,
