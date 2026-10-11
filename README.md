@@ -70,3 +70,11 @@ Apply again before starting the API. The API calls functions that later scripts 
 - Never edit a numbered script that has been applied anywhere; add the next number (the next free number is in `PROGRESS.md`). Function files can be edited and re-run.
 - Use a separate container (for example `nexus-pg-test`) and database for experiments and tests; do not drop or recreate the shared one.
 - After script `03_foundation_grants.sql` the `nexus_app` login still has no password. Set it yourself with `docker exec -it nexus-pg psql -U postgres -c "\password nexus_app"`; never put it in a script.
+
+## Inventory (module 5)
+
+- **Stock changes only through the ledger.** `items.current_stock` is changed only together with a `stock_movements` row, by `sp_stock_in`, `sp_stock_out`, `sp_adjust_stock` or `sp_record_purchase`. The ledger is append-only (a trigger refuses UPDATE, DELETE and TRUNCATE), and `SELECT * FROM vw_item_stock_check WHERE difference <> 0` must return no rows.
+- **Opening stock** is entered as an adjustment (Admin, with a note such as "Opening stock"). **Set the item's cost price first**: the adjustment row records the item's cost price at that moment, and that is the value the ledger keeps.
+- **Stock never goes negative** (`ck_items_stock_not_negative`). A stock-out or adjustment that would do so raises `NX411` with the item, what is available and what was asked for.
+- **Units** are master data in the `units` table (nos, m, kg, ltr, pack, box, set, pair, roll). To add one for now: `INSERT INTO units (tenant_id, unit_code, unit_name, sort_order) VALUES (1, 'bag', 'Bag', 100);`
+- **Other modules** (order fulfilment) call `sp_stock_out` from inside their own procedure so a multi-line order commits or rolls back as one.
