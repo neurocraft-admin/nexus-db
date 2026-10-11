@@ -3,7 +3,7 @@
 -- The unique key (tenant_id, mobile) also covers deactivated customers, so a number stays reserved after
 -- deactivation; fn_save_customer says so with a clear message instead of a bare constraint error.
 -- mobile has ONE stored form: ten digits, first digit 6-9 (an Indian mobile number). The API strips spaces,
--- dashes and a +91 or 0 prefix before it gets here; this CHECK is the safety net for anything that does not
+-- dashes and a +91, 91 or 0 prefix before it gets here; this CHECK is the safety net for anything that does not
 -- go through the API. Added to 08 before it was applied anywhere real, so 08 was edited rather than adding a script.
 
 CREATE TABLE IF NOT EXISTS customers (
