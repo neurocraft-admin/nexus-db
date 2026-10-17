@@ -78,3 +78,11 @@ Apply again before starting the API. The API calls functions that later scripts 
 - **Stock never goes negative** (`ck_items_stock_not_negative`). A stock-out or adjustment that would do so raises `NX411` with the item, what is available and what was asked for.
 - **Units** are master data in the `units` table (nos, m, kg, ltr, pack, box, set, pair, roll). To add one for now: `INSERT INTO units (tenant_id, unit_code, unit_name, sort_order) VALUES (1, 'bag', 'Bag', 100);`
 - **Other modules** (order fulfilment) call `sp_stock_out` from inside their own procedure so a multi-line order commits or rolls back as one.
+
+## Packages (module 4)
+
+- **A package is a stock-item bundle sold at one typed-in, tax-inclusive price** (`package_price`, above 0). There is no GST column, rate or tax split anywhere. A price below the component cost is a warning for the person, never a block.
+- **Lines are stock items only** (`item_id` and a quantity of up to 3 decimals). Name, unit, cost, selling price and stock are read live from `items`; labour is a custom quotation line, not a package line.
+- **Cost is live, price is fixed.** `vw_package_summary` computes the component cost from current item cost prices (sum of `round(quantity x cost_price, 2)`). `component_cost_at_save` keeps the figure from the last save so a screen can say the cost has moved. Quotations copy the price when issued.
+- **Availability only reads stock** (`fn_get_package_availability`: required, available, short by, complete sets possible). It never reserves, deducts or blocks. Stock leaves only through order fulfilment (`sp_stock_out`), where the strict no-negative-stock block applies; fulfilment gets the components from `fn_get_package_components`.
+- **A deactivated component** is not blocked: the package is flagged (`has_inactive_component`, "Needs attention"), saving it is refused until the item is replaced, and fulfilment fails with a conflict naming the item.
