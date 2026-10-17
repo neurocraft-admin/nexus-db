@@ -4,6 +4,8 @@
 --   23503 foreign key       - the unit is not an active unit; the API maps it to 400
 --   23514 check violation   - code not upper case letters/digits/. _ / -, or a negative price or level
 --   P0002 not found         - unknown item on update
+--   NX409 rule conflict     - an update changes the unit of an item that has stock movements or package lines
+--                             (fn_check_item_unit_change; COLUMN names the unit)
 CREATE OR REPLACE FUNCTION fn_save_item(
     p_tenant_id integer, p_item_id bigint, p_item_code varchar, p_item_name varchar, p_unit varchar,
     p_cost_price numeric, p_selling_price numeric, p_reorder_level numeric)
@@ -15,6 +17,10 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM units u
                     WHERE u.tenant_id = p_tenant_id AND u.unit_code = p_unit AND u.is_active) THEN
         RAISE EXCEPTION 'Unit % is not available', p_unit USING ERRCODE = '23503';
+    END IF;
+
+    IF p_item_id IS NOT NULL THEN
+        PERFORM fn_check_item_unit_change(p_tenant_id, p_item_id, p_unit);
     END IF;
 
     IF p_item_id IS NULL THEN
