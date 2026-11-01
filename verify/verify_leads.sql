@@ -10,7 +10,7 @@ DECLARE
         'fn_get_lead_activities', 'fn_get_lead_source_summary', 'sp_change_lead_status', 'sp_check_lead_status_move',
         'sp_assign_lead', 'sp_add_lead_note', 'sp_set_lead_active', 'sp_find_or_create_customer', 'sp_fill_lead_quotations',
         'fn_convert_lead', 'fn_parse_import_rows', 'fn_check_import_rows', 'fn_import_leads', 'fn_import_one_lead', 'sp_assert_import_default_source',
-        'fn_business_day_start', 'sp_update_lead', 'sp_check_lead_follow_up_filter', 'sp_check_quotation_lead'];
+        'fn_business_day_start', 'sp_update_lead', 'sp_check_lead_follow_up_filter', 'sp_check_quotation_lead', 'fn_quotation_visible_to'];
 BEGIN
     FOREACH v_name IN ARRAY ARRAY['17_leads_schema.sql', '18_leads_menu.sql'] LOOP
         IF NOT EXISTS (SELECT 1 FROM deployment_log d WHERE d.script_name = v_name) THEN
