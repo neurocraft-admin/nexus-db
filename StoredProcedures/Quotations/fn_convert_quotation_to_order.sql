@@ -3,7 +3,8 @@
 -- locked first, so the second call waits, sees 'converted' and is refused naming the order that already exists;
 -- uq_orders_quotation is the safety net behind it. Nothing is deducted: stock only leaves when the order is
 -- fulfilled. Only the lines are copied, so a custom line stays on the order and is skipped at fulfilment.
---   22023 invalid parameter - the quotation has no customer yet (a lead must become a customer first)
+--   22023 invalid parameter - the quotation has no customer yet: it is for a lead, and converting that lead to a customer
+--                             (fn_convert_lead) sets the customer on the quotation
 --   P0002 not found         - unknown quotation
 --   NX409 rule conflict     - not approved, already converted (names the order), or the customer is inactive
 CREATE OR REPLACE FUNCTION fn_convert_quotation_to_order(p_tenant_id integer, p_quotation_id bigint, p_created_by integer)
@@ -26,7 +27,7 @@ BEGIN
         RAISE EXCEPTION 'Only an approved quotation can be converted; this one is %', v_q.status USING ERRCODE = 'NX409';
     END IF;
     IF v_q.customer_id IS NULL THEN
-        RAISE EXCEPTION 'The quotation needs a customer before it can be converted' USING ERRCODE = '22023', COLUMN = 'customerId';
+        RAISE EXCEPTION 'The quotation is for a lead, not yet a customer: convert the lead to a customer first' USING ERRCODE = '22023', COLUMN = 'customerId';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM customers c WHERE c.customer_id = v_q.customer_id AND c.tenant_id = p_tenant_id AND c.is_active) THEN
         RAISE EXCEPTION 'The customer of quotation % is inactive', v_q.quotation_no USING ERRCODE = 'NX409', COLUMN = 'customerId';

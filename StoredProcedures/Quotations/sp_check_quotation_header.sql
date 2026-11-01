@@ -1,8 +1,9 @@
 -- Validates the header of a quotation before it is saved. Each RAISE names the request field with COLUMN.
 --   22023 invalid parameter - no customer or lead, a valid-until before the quotation date, a discount that is
 --                             negative or has more than 2 decimals
---   P0002 not found         - an unknown customer or template
---   NX409 rule conflict     - an inactive customer
+--   P0002 not found         - an unknown customer, lead or template
+--   NX409 rule conflict     - an inactive customer; a deactivated lead; a lead that has already become a customer
+--                             (quote the customer instead, so the quotation and the sale stay together)
 CREATE OR REPLACE PROCEDURE sp_check_quotation_header(
     p_tenant_id integer, p_customer_id bigint, p_lead_id bigint, p_template_id bigint,
     p_quotation_date date, p_valid_until date, p_discount_amount numeric)
@@ -11,7 +12,7 @@ DECLARE
     v_active boolean;
 BEGIN
     IF p_customer_id IS NULL AND p_lead_id IS NULL THEN
-        RAISE EXCEPTION 'A quotation needs a customer' USING ERRCODE = '22023', COLUMN = 'customerId';
+        RAISE EXCEPTION 'A quotation needs a customer or a lead' USING ERRCODE = '22023', COLUMN = 'customerId';
     END IF;
     IF p_quotation_date IS NULL OR p_valid_until IS NULL OR p_valid_until < p_quotation_date THEN
         RAISE EXCEPTION 'The valid-until date cannot be before the quotation date' USING ERRCODE = '22023', COLUMN = 'validUntil';
@@ -27,6 +28,9 @@ BEGIN
         IF NOT v_active THEN
             RAISE EXCEPTION 'Customer % is inactive', p_customer_id USING ERRCODE = 'NX409', COLUMN = 'customerId';
         END IF;
+    END IF;
+    IF p_lead_id IS NOT NULL THEN
+        CALL sp_check_quotation_lead(p_tenant_id, p_lead_id, p_customer_id);
     END IF;
     IF p_template_id IS NOT NULL AND NOT EXISTS (
             SELECT 1 FROM quotation_templates t WHERE t.template_id = p_template_id AND t.tenant_id = p_tenant_id) THEN
