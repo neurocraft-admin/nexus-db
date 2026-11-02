@@ -29,7 +29,7 @@ BEGIN
         CALL sp_assert_assignee(p_tenant_id, v_assignee);
     END IF;
     CALL sp_insert_lead(p_tenant_id, p_lead_name, v_mobile, p_email, p_address, p_lead_source_id, p_expected_value,
-                        p_next_follow_up_date, p_notes, v_assignee, p_user_id, NULL, NULL, v_saved);
+                        p_next_follow_up_date, p_notes, v_assignee, p_user_id, NULL, NULL, p_visible_to, v_saved);
     RETURN v_saved;
 END;
 $$;

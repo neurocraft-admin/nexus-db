@@ -20,7 +20,7 @@ BEGIN
         RETURN;
     END IF;
     IF p_is_active AND NOT v_lead.is_closed THEN
-        CALL sp_assert_no_open_lead_mobile(p_tenant_id, v_lead.mobile, p_lead_id);
+        CALL sp_assert_no_open_lead_mobile(p_tenant_id, v_lead.mobile, p_lead_id, p_visible_to);
     END IF;
     UPDATE leads SET is_active = p_is_active, updated_at = now() WHERE leads.lead_id = p_lead_id AND leads.tenant_id = p_tenant_id;
     CALL sp_log_lead_activity(p_tenant_id, p_lead_id, CASE WHEN p_is_active THEN 'reactivated' ELSE 'deactivated' END,

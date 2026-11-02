@@ -39,7 +39,7 @@ BEGIN
     END IF;
     CALL sp_check_lead_status_move(v_lead.is_active, v_lead.converted_customer_id IS NOT NULL, v_new.is_active, v_new.is_won, v_new.is_lost, v_reason);
     IF v_lead.is_closed AND NOT v_new.is_lost THEN
-        CALL sp_assert_no_open_lead_mobile(p_tenant_id, v_lead.mobile, p_lead_id);
+        CALL sp_assert_no_open_lead_mobile(p_tenant_id, v_lead.mobile, p_lead_id, p_visible_to);
     END IF;
     UPDATE leads SET lead_status_id = p_status_id, is_closed = v_new.is_lost, lost_reason = CASE WHEN v_new.is_lost THEN v_reason END,
            closed_at = CASE WHEN v_new.is_lost THEN now() END, updated_at = now()

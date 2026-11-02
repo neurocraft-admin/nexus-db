@@ -32,13 +32,13 @@ BEGIN
     END IF;
     INSERT INTO lead_import_batches (tenant_id, file_name, default_source_id, assigned_to, created_by)
     VALUES (p_tenant_id, btrim(p_file_name), p_default_source_id, v_assignee, p_user_id) RETURNING batch_id INTO v_batch;
-    FOR v_row IN SELECT * FROM fn_check_import_rows(p_tenant_id, p_rows, p_default_source_id) ORDER BY 1 LOOP
+    FOR v_row IN SELECT * FROM fn_check_import_rows(p_tenant_id, p_rows, p_default_source_id, p_visible_to) ORDER BY 1 LOOP
         v_reason := v_row.reason; v_new := NULL;
         IF v_reason IS NULL THEN
             SELECT o.new_lead_id, o.reject_reason INTO v_new, v_reason
               FROM fn_import_one_lead(p_tenant_id, v_row.lead_name, v_row.mobile, v_row.email, v_row.address, v_row.lead_source_id,
                                       v_row.expected_value, v_row.next_follow_up_date, v_row.notes, v_assignee, p_user_id, v_batch,
-                                      'Imported from ' || btrim(p_file_name)) o;
+                                      'Imported from ' || btrim(p_file_name), p_visible_to) o;
         END IF;
         v_created := v_created + CASE WHEN v_new IS NOT NULL THEN 1 ELSE 0 END;
         v_total := v_total + 1;

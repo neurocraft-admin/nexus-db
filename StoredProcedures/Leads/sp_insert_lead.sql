@@ -5,10 +5,11 @@
 -- does not use one up.
 --   NX409 rule conflict - another open lead has this mobile number (also when two people save at the same moment:
 --                         the unique index decides and the loser gets this same answer)
+DROP PROCEDURE IF EXISTS sp_insert_lead(integer, varchar, varchar, varchar, varchar, integer, numeric, date, varchar, integer, integer, bigint, varchar, OUT bigint);
 CREATE OR REPLACE PROCEDURE sp_insert_lead(
     p_tenant_id integer, p_lead_name varchar, p_mobile varchar, p_email varchar, p_address varchar,
     p_lead_source_id integer, p_expected_value numeric, p_next_follow_up_date date, p_notes varchar,
-    p_assigned_to integer, p_user_id integer, p_import_batch_id bigint, p_activity_note varchar, OUT p_lead_id bigint)
+    p_assigned_to integer, p_user_id integer, p_import_batch_id bigint, p_activity_note varchar, p_visible_to integer, OUT p_lead_id bigint)
 LANGUAGE plpgsql AS $$
 DECLARE
     v_status_id integer;
@@ -19,7 +20,7 @@ BEGIN
     IF v_status_id IS NULL THEN
         RAISE EXCEPTION 'No starting status is configured for leads' USING ERRCODE = 'NX409';
     END IF;
-    CALL sp_assert_no_open_lead_mobile(p_tenant_id, p_mobile, NULL);
+    CALL sp_assert_no_open_lead_mobile(p_tenant_id, p_mobile, NULL, p_visible_to);
     INSERT INTO leads (tenant_id, lead_no, lead_name, mobile, email, address, lead_source_id, lead_status_id, assigned_to,
                        expected_value, next_follow_up_date, notes, import_batch_id, created_by)
     VALUES (p_tenant_id, fn_next_document_no(p_tenant_id, 'LD'), btrim(p_lead_name), p_mobile, p_email, p_address,

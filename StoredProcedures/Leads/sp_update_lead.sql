@@ -21,7 +21,7 @@ BEGIN
         RAISE EXCEPTION 'A deactivated lead cannot be edited' USING ERRCODE = 'NX409';
     END IF;
     IF NOT v_lead.is_closed AND v_lead.mobile <> p_mobile THEN
-        CALL sp_assert_no_open_lead_mobile(p_tenant_id, p_mobile, p_lead_id);
+        CALL sp_assert_no_open_lead_mobile(p_tenant_id, p_mobile, p_lead_id, p_visible_to);
     END IF;
     UPDATE leads SET lead_name = btrim(p_lead_name), mobile = p_mobile, email = p_email, address = p_address,
            lead_source_id = p_lead_source_id, expected_value = p_expected_value, next_follow_up_date = p_next_follow_up_date,
