@@ -16,7 +16,10 @@ LANGUAGE plpgsql AS $$
 BEGIN
     CALL sp_assert_import_default_source(p_tenant_id, p_default_source_id);
     RETURN QUERY
-    WITH parsed AS (SELECT * FROM fn_parse_import_rows(p_tenant_id, p_rows, p_default_source_id)),
+    WITH parsed AS (
+        SELECT r.row_number, r.lead_name, r.mobile, r.email, r.address, r.lead_source_id, r.expected_value,
+               r.next_follow_up_date, r.notes, r.reason
+          FROM fn_parse_import_rows(p_tenant_id, p_rows, p_default_source_id) r),
     open_lead AS (
         SELECT p.row_number AS rn, l.lead_no, (p_visible_to IS NULL OR l.assigned_to = p_visible_to) AS seen FROM parsed p
           JOIN leads l ON l.tenant_id = p_tenant_id AND l.mobile = p.mobile AND l.is_active AND NOT l.is_closed

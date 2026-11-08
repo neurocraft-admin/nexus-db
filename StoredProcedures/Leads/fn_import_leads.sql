@@ -18,10 +18,8 @@ DECLARE
     v_assignee integer := COALESCE(p_visible_to, p_assigned_to);
     v_batch    bigint;
     v_row      record;
-    v_new      bigint;
-    v_reason   text;
-    v_created  integer := 0;
-    v_total    integer := 0;
+    v_new      bigint; v_reason text;
+    v_created  integer := 0; v_total integer := 0;
 BEGIN
     IF p_file_name IS NULL OR btrim(p_file_name) = '' OR length(p_file_name) > 255 THEN
         RAISE EXCEPTION 'The import needs a file name of up to 255 characters' USING ERRCODE = '22023', COLUMN = 'fileName';
@@ -32,7 +30,9 @@ BEGIN
     END IF;
     INSERT INTO lead_import_batches (tenant_id, file_name, default_source_id, assigned_to, created_by)
     VALUES (p_tenant_id, btrim(p_file_name), p_default_source_id, v_assignee, p_user_id) RETURNING batch_id INTO v_batch;
-    FOR v_row IN SELECT * FROM fn_check_import_rows(p_tenant_id, p_rows, p_default_source_id, p_visible_to) ORDER BY 1 LOOP
+    FOR v_row IN SELECT c.row_number, c.lead_name, c.mobile, c.email, c.address, c.lead_source_id, c.expected_value,
+                        c.next_follow_up_date, c.notes, c.reason, c.warning
+                   FROM fn_check_import_rows(p_tenant_id, p_rows, p_default_source_id, p_visible_to) c ORDER BY 1 LOOP
         v_reason := v_row.reason; v_new := NULL;
         IF v_reason IS NULL THEN
             SELECT o.new_lead_id, o.reject_reason INTO v_new, v_reason

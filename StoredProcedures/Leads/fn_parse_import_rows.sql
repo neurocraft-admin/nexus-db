@@ -25,7 +25,8 @@ BEGIN
                NULLIF(btrim(e.item ->> 'nextFollowUpDate'), '') AS fd, NULLIF(btrim(e.item ->> 'notes'), '') AS nt
           FROM jsonb_array_elements(p_rows) WITH ORDINALITY AS e (item, ord)),
     resolved AS (
-        SELECT r.*, CASE WHEN r.src IS NULL THEN p_default_source_id ELSE s.lead_source_id END AS sid,
+        SELECT r.rn, r.nm, r.mob, r.em, r.ad, r.src, r.ev, r.fd, r.nt,
+               CASE WHEN r.src IS NULL THEN p_default_source_id ELSE s.lead_source_id END AS sid,
                s.is_active AS sactive, fn_try_numeric(r.ev) AS evn, fn_try_date(r.fd) AS fdd
           FROM raw r LEFT JOIN lead_sources s ON r.src IS NOT NULL AND s.tenant_id = p_tenant_id AND lower(s.source_name) = lower(r.src))
     SELECT x.rn, x.nm, x.mob, x.em, x.ad, x.sid, x.evn, x.fdd, x.nt,

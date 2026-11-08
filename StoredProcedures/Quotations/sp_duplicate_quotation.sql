@@ -9,10 +9,12 @@ CREATE OR REPLACE PROCEDURE sp_duplicate_quotation(
     p_tenant_id integer, p_quotation_id bigint, p_created_by integer, OUT p_new_id bigint)
 LANGUAGE plpgsql AS $$
 DECLARE
-    v_src   quotations%ROWTYPE;
+    v_src   record;
     v_today date := fn_business_today(p_tenant_id);
 BEGIN
-    SELECT q.* INTO v_src FROM quotations q
+    SELECT q.quotation_id, q.quotation_no, q.customer_id, q.lead_id, q.template_id, q.quotation_date, q.valid_until,
+           q.subtotal, q.discount_amount, q.total_amount, q.terms_text, q.notes INTO v_src
+      FROM quotations q
      WHERE q.quotation_id = p_quotation_id AND q.tenant_id = p_tenant_id FOR SHARE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Quotation % not found', p_quotation_id USING ERRCODE = 'P0002';
