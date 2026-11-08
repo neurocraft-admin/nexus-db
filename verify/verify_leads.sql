@@ -12,7 +12,7 @@ DECLARE
         'fn_convert_lead', 'fn_parse_import_rows', 'fn_check_import_rows', 'fn_import_leads', 'fn_import_one_lead', 'sp_assert_import_default_source',
         'fn_business_day_start', 'sp_update_lead', 'sp_check_lead_follow_up_filter', 'sp_check_quotation_lead', 'fn_quotation_visible_to'];
 BEGIN
-    FOREACH v_name IN ARRAY ARRAY['17_leads_schema.sql', '18_leads_menu.sql'] LOOP
+    FOREACH v_name IN ARRAY ARRAY['17_leads_schema.sql', '18_leads_menu.sql', '19_leads_menu_icon.sql'] LOOP
         IF NOT EXISTS (SELECT 1 FROM deployment_log d WHERE d.script_name = v_name) THEN
             RAISE EXCEPTION 'Script not applied: %', v_name;
         END IF;
@@ -59,7 +59,7 @@ BEGIN
             RAISE EXCEPTION 'Admin does not have full access to %', v_name;
         END IF;
     END LOOP;
-    IF NOT EXISTS (SELECT 1 FROM menu_items WHERE url = '/sales/leads' AND parent_id IS NOT NULL) THEN
+    IF NOT EXISTS (SELECT 1 FROM menu_items WHERE url = '/sales/leads' AND parent_id IS NOT NULL AND icon = 'funnel') THEN
         RAISE EXCEPTION 'Menu item missing: /sales/leads';
     END IF;
     -- Consistency of the data: a lead is closed exactly when its status is Won or Lost, a converted lead is Won, every
