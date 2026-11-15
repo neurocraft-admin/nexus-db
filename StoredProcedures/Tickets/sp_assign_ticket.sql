@@ -1,9 +1,11 @@
 -- Gives a ticket to an active user (staff or admin) and writes exactly ONE history row: the status stays as it is (old
 -- and new status are the same) and assigned_to says who it went to. It does NOT move open to in progress: that is a
 -- separate, explicit status change. Assigning to the person who already has it changes nothing and writes nothing.
--- A staff user (p_visible_to is their id) can only reassign a ticket that is assigned to them; once given away it is no
--- longer theirs to see. A closed ticket is final and cannot be assigned.
---   P0002 not found     - unknown ticket or one outside p_visible_to; unknown assignee (COLUMN assignedTo)
+-- ONLY NON-STAFF USERS (administrators) MAY ASSIGN OR REASSIGN: a staff user (p_visible_to is their id) is refused, even for
+-- a ticket that is theirs. Staff can change the status of their own tickets but cannot hand them on. A closed ticket is final
+-- and cannot be assigned.
+--   42501 insufficient privilege - the caller is a staff user (p_visible_to is not NULL)
+--   P0002 not found     - unknown ticket; unknown assignee (COLUMN assignedTo)
 --   NX409 rule conflict - a closed ticket; a deactivated assignee (COLUMN assignedTo)
 CREATE OR REPLACE PROCEDURE sp_assign_ticket(
     p_tenant_id integer, p_ticket_id bigint, p_assigned_to integer, p_user_id integer, p_visible_to integer)
@@ -11,9 +13,12 @@ LANGUAGE plpgsql AS $$
 DECLARE
     v_ticket record;
 BEGIN
+    IF p_visible_to IS NOT NULL THEN
+        RAISE EXCEPTION 'Only an administrator can assign or reassign a ticket' USING ERRCODE = '42501';
+    END IF;
     SELECT t.status, t.assigned_to INTO v_ticket
       FROM tickets t
-     WHERE t.ticket_id = p_ticket_id AND t.tenant_id = p_tenant_id AND (p_visible_to IS NULL OR t.assigned_to = p_visible_to)
+     WHERE t.ticket_id = p_ticket_id AND t.tenant_id = p_tenant_id
        FOR UPDATE OF t;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Ticket % not found', p_ticket_id USING ERRCODE = 'P0002';

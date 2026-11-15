@@ -344,13 +344,13 @@ BEGIN
         AND (SELECT count(*) FROM fn_get_ticket_status_history(1, v_t3, v_s2)) >= 2 AND (SELECT count(*) FROM fn_get_ticket_attachment(1, v_t3, pg_temp.ctx('att3'), v_s2)) = 1);
     PERFORM pg_temp.ok('an unassigned ticket is visible to no staff user', NOT EXISTS (SELECT 1 FROM fn_get_ticket_by_id(1, v_t7, v_s1)));
     PERFORM pg_temp.fails('staff 1 cannot change ticket 3', format($q$CALL sp_change_ticket_status(1, %s, 'in_progress', NULL, %s, %s)$q$, v_t3, v_s1, v_s1), 'P0002');
-    PERFORM pg_temp.fails('staff 1 cannot assign ticket 3', format($q$CALL sp_assign_ticket(1, %s, %s, %s, %s)$q$, v_t3, v_s1, v_s1, v_s1), 'P0002');
+    PERFORM pg_temp.fails('a staff user cannot assign a ticket that is not theirs', format($q$CALL sp_assign_ticket(1, %s, %s, %s, %s)$q$, v_t3, v_s1, v_s1, v_s1), '42501');
     CALL sp_change_ticket_status(1, v_t3, 'in_progress', NULL, v_s2, v_s2);
     PERFORM pg_temp.ok('staff 2 can change their own ticket', (SELECT status FROM tickets WHERE ticket_id = v_t3) = 'in_progress');
-    CALL sp_assign_ticket(1, v_t2, v_s2, v_s1, v_s1);
-    PERFORM pg_temp.ok('a staff user can hand their ticket to someone, after which it is no longer theirs to see',
-        (SELECT assigned_to = v_s2 FROM tickets WHERE ticket_id = v_t2) AND NOT EXISTS (SELECT 1 FROM fn_get_ticket_by_id(1, v_t2, v_s1)));
-    CALL sp_assign_ticket(1, v_t2, v_s1, pg_temp.ctx('admin')::integer, NULL);
+    PERFORM pg_temp.fails('a staff user cannot hand on even their OWN ticket (only administrators assign)', format($q$CALL sp_assign_ticket(1, %s, %s, %s, %s)$q$, v_t2, v_s2, v_s1, v_s1), '42501');
+    PERFORM pg_temp.fails('... nor give it to themselves', format($q$CALL sp_assign_ticket(1, %s, %s, %s, %s)$q$, v_t2, v_s1, v_s1, v_s1), '42501');
+    PERFORM pg_temp.ok('the refused assignment changed nothing: still with staff 1, and no new history row',
+        (SELECT assigned_to = v_s1 FROM tickets WHERE ticket_id = v_t2) AND (SELECT count(*) FROM ticket_status_history WHERE ticket_id = v_t2) = 2);
 END;
 $$;
 
