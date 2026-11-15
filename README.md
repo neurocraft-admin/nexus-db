@@ -132,3 +132,16 @@ Scripts 22 (schema, seeds) and 23 (resources, menu, permissions); functions in `
 - **The portal's Check Status** (`fn_get_open_tickets_by_mobile`) returns five columns only: number, issue text, status, the technician's FIRST name and the raised date. The portal's lookup reuses `fn_get_customer_by_mobile` (Customers).
 - **Error codes** as elsewhere: 22023 invalid field (COLUMN names the request field), P0002 not found, NX409 rule conflict, 23505 on a duplicate issue type name (`uq_issue_types_tenant_name`).
 - **Tests:** `tests/test_tickets.sql` (200 checks in one rolled-back transaction, safe anywhere) and `tests/tickets_concurrency.ps1` (two real sessions racing for the same customer; it writes tickets, so use a scratch database only).
+
+## Staff and tasks (module 8)
+
+Scripts 25 (schema) and 26 (resources, menu, permissions); functions in `StoredProcedures/Staff/`; `verify/verify_staff.sql` runs with the others. Script 24 stays reserved for the letterhead drop; the next free number is 27.
+
+- **Tables:** `staff_profiles` (optional extra details for a staff user: employee code, designation, alternate mobile, joining date, notes; **no `is_active` of its own**: `users.is_active` is the single switch), `tasks` and `task_status_history` (append-only by trigger, with `assigned_to` so a reassignment shows who it went to). `vw_staff_work` lists a person's tasks and assigned tickets in one shape (reporting and My work read it).
+- **Numbers** are `TSK-yyyy-nnnn` from `fn_next_document_no`, taken inside the saving transaction, so a refused task uses none up.
+- **Who can be given work:** an active staff-type user whose role has `my_work` view (`fn_role_can_receive_work`, checked by `sp_assert_task_assignee`). An admin-type user, a deactivated user, or a role without My work is refused with NX409 (COLUMN assignedTo). Moving someone with open tasks into a role that cannot see My work is refused too.
+- **Status rules** (`sp_check_task_status_move`): assigned to in progress or cancelled; in progress to done or cancelled; done and cancelled are final. Done needs a completion note (22023). `sp_change_task_status` locks the row first. A **staff** caller (`p_visible_to` set) acts only on their own tasks, can start and finish but **cannot cancel** (42501), and cannot create, edit or assign (42501).
+- **Deactivation:** `fn_set_user_active` (Foundation) now refuses to deactivate anyone with open tasks or open tickets (`sp_assert_no_open_work`, NX409, COLUMN isActive). Both the Users and the Staff screens go through it.
+- **My work** (`fn_get_my_work`): Today = open tasks scheduled today or earlier (overdue ones flagged) plus every open ticket; Upcoming = later or unscheduled tasks; Done = tasks and tickets finished in the last 7 days. Days are business days in the company's time zone. Two reports: `fn_get_my_completed_tasks` and `fn_get_my_resolved_tickets` (by who moved the ticket to resolved).
+- **Error codes** as elsewhere: 22023, P0002, NX409, 42501, 23505 (duplicate user name or employee code).
+- **Tests:** `tests/test_staff.sql` (188 checks in one rolled-back transaction, safe anywhere) and `tests/staff_concurrency.ps1` (two real sessions: the same status change at the same moment, finish against reassign, and task numbers; it writes tasks, so use a scratch database only).

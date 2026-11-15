@@ -1,4 +1,6 @@
 -- NX409 is our own SQLSTATE for "rule conflict"; the API maps it to 409.
+-- Deactivating also needs the person to have no open work (open tasks or open tickets, see sp_assert_no_open_work, Staff module):
+-- their work must be reassigned first. Every screen goes through here, so the Users screen and the Staff screen are held to the same rule.
 CREATE OR REPLACE FUNCTION fn_set_user_active(p_tenant_id integer, p_user_id integer, p_is_active boolean)
 RETURNS void
 LANGUAGE plpgsql AS $$
@@ -11,6 +13,10 @@ BEGIN
        FOR UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'User % not found', p_user_id USING ERRCODE = 'P0002';
+    END IF;
+
+    IF NOT p_is_active THEN
+        CALL sp_assert_no_open_work(p_tenant_id, p_user_id);
     END IF;
 
     IF NOT p_is_active AND v_user_type = 'admin' THEN
