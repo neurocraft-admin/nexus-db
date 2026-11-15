@@ -6,7 +6,7 @@
 --   22023 invalid parameter - an unknown status, a note over 500 characters, or no note on open -> closed
 --   P0002 not found         - unknown ticket or one outside p_visible_to
 --   NX409 rule conflict     - a move that is not allowed (closed is final; reopen only from Resolved); a reopen
---                             while the customer has another active ticket (the message and DETAIL give its number)
+--                             while the customer has another active ticket (the message and HINT give its number)
 CREATE OR REPLACE PROCEDURE sp_change_ticket_status(
     p_tenant_id integer, p_ticket_id bigint, p_new_status varchar, p_note varchar, p_user_id integer, p_visible_to integer)
 LANGUAGE plpgsql AS $$

@@ -23,8 +23,8 @@ BEGIN
 END;
 $$;
 
--- Runs a statement that must be refused with the given SQLSTATE (and, when given, COLUMN, DETAIL and constraint name).
-CREATE FUNCTION pg_temp.fails(p_label text, p_sql text, p_state text, p_column text DEFAULT NULL, p_detail text DEFAULT NULL,
+-- Runs a statement that must be refused with the given SQLSTATE (and, when given, COLUMN, HINT and constraint name).
+CREATE FUNCTION pg_temp.fails(p_label text, p_sql text, p_state text, p_column text DEFAULT NULL, p_hint text DEFAULT NULL,
                               p_constraint text DEFAULT NULL)
 RETURNS void LANGUAGE plpgsql AS $$
 DECLARE
@@ -34,14 +34,14 @@ BEGIN
         EXECUTE p_sql;
     EXCEPTION WHEN OTHERS THEN
         v_state := SQLSTATE;
-        GET STACKED DIAGNOSTICS v_column = COLUMN_NAME, v_detail = PG_EXCEPTION_DETAIL, v_constraint = CONSTRAINT_NAME;
+        GET STACKED DIAGNOSTICS v_column = COLUMN_NAME, v_detail = PG_EXCEPTION_HINT, v_constraint = CONSTRAINT_NAME;
     END;
     PERFORM pg_temp.ok(p_label || ' [refused with ' || p_state || ', got ' || COALESCE(v_state, 'no error') || ']', v_state = p_state);
     IF p_column IS NOT NULL THEN
         PERFORM pg_temp.ok(p_label || ' [names column ' || p_column || ']', v_column = p_column);
     END IF;
-    IF p_detail IS NOT NULL THEN
-        PERFORM pg_temp.ok(p_label || ' [detail ' || p_detail || ']', v_detail = p_detail);
+    IF p_hint IS NOT NULL THEN
+        PERFORM pg_temp.ok(p_label || ' [hint ' || p_hint || ']', v_detail = p_hint);
     END IF;
     IF p_constraint IS NOT NULL THEN
         PERFORM pg_temp.ok(p_label || ' [by ' || p_constraint || ']', v_constraint = p_constraint);

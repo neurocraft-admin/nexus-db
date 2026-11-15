@@ -5,7 +5,7 @@
 -- One of p_issue_type_id or p_other_issue_text. The attachment arguments are all given or all NULL.
 --   22023 / P0002 / NX409   - the field errors of sp_check_ticket_fields; an unknown customer is P0002 (COLUMN customerId)
 --   NX409 rule conflict     - a deactivated customer (COLUMN customerId); the customer already has an active ticket:
---                             the message and DETAIL give its number, also when two submissions arrive at the same
+--                             the message and HINT give its number, also when two submissions arrive at the same
 --                             moment (the unique index decides and the loser gets this same answer)
 CREATE OR REPLACE FUNCTION fn_create_ticket(
     p_tenant_id integer, p_customer_id bigint, p_issue_type_id integer, p_other_issue_text varchar,
