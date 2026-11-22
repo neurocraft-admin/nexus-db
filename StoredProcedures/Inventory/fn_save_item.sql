@@ -4,11 +4,14 @@
 --   23503 foreign key       - the unit is not an active unit; the API maps it to 400
 --   23514 check violation   - code not upper case letters/digits/. _ / -, or a negative price or level
 --   P0002 not found         - unknown item on update
+--   make_text is the default 'make and warranty' text a quotation line takes from the item (NULL or blank clears it)
 --   NX409 rule conflict     - an update changes the unit of an item that has stock movements or package lines
 --                             (fn_check_item_unit_change; COLUMN names the unit)
+-- The signature gained p_make_text: the old one is dropped so a call can never be ambiguous between the two.
+DROP FUNCTION IF EXISTS fn_save_item(integer, bigint, varchar, varchar, varchar, numeric, numeric, numeric);
 CREATE OR REPLACE FUNCTION fn_save_item(
     p_tenant_id integer, p_item_id bigint, p_item_code varchar, p_item_name varchar, p_unit varchar,
-    p_cost_price numeric, p_selling_price numeric, p_reorder_level numeric)
+    p_cost_price numeric, p_selling_price numeric, p_reorder_level numeric, p_make_text varchar DEFAULT NULL)
 RETURNS bigint
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -24,13 +27,15 @@ BEGIN
     END IF;
 
     IF p_item_id IS NULL THEN
-        INSERT INTO items (tenant_id, item_code, item_name, unit, cost_price, selling_price, reorder_level)
-        VALUES (p_tenant_id, p_item_code, p_item_name, p_unit, p_cost_price, p_selling_price, p_reorder_level)
+        INSERT INTO items (tenant_id, item_code, item_name, unit, cost_price, selling_price, reorder_level, make_text)
+        VALUES (p_tenant_id, p_item_code, p_item_name, p_unit, p_cost_price, p_selling_price, p_reorder_level,
+                NULLIF(btrim(p_make_text), ''))
         RETURNING items.item_id INTO v_item_id;
     ELSE
         UPDATE items
            SET item_code = p_item_code, item_name = p_item_name, unit = p_unit, cost_price = p_cost_price,
-               selling_price = p_selling_price, reorder_level = p_reorder_level, updated_at = now()
+               selling_price = p_selling_price, reorder_level = p_reorder_level,
+               make_text = NULLIF(btrim(p_make_text), ''), updated_at = now()
          WHERE items.item_id = p_item_id AND items.tenant_id = p_tenant_id
         RETURNING items.item_id INTO v_item_id;
 

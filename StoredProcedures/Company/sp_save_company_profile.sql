@@ -33,5 +33,6 @@ BEGIN
            quotation_terms = fn_company_value(p_profile, 'quotationTerms'),
            updated_by = p_user_id, updated_at = now()
      WHERE tenant_id = p_tenant_id;
+    CALL sp_save_company_defaults(p_tenant_id, p_profile);
 END;
 $$;
