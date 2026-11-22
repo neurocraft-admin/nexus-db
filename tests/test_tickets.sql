@@ -452,6 +452,50 @@ BEGIN
 END;
 $$;
 
+-- ---------------------------------------------------------------- a staff user can read the tickets they raised (module 11)
+-- Visibility is "assigned to me OR raised by me"; changing the status stays with the person it is assigned to.
+DO $$
+DECLARE
+    v_s1     integer := pg_temp.ctx('staff1');
+    v_s2     integer := pg_temp.ctx('staff2');
+    v_by     integer := pg_temp.ctx('admin');
+    v_ticket bigint;
+    v_att    bigint;
+BEGIN
+    PERFORM pg_temp.setctx('c8', fn_save_customer(1, NULL, 'Hari Nair', '9876500008', 'Karamana'));
+    SELECT c.ticket_id INTO v_ticket FROM fn_create_ticket(1, pg_temp.ctx('c8'), pg_temp.ctx('it_not_working')::integer, NULL, 'Raised at the front desk',
+        'internal', v_s1, 'photo.pdf', 'a1b2c3d4e5f60718293a4b5c6d7e8f90.pdf', 'application/pdf', 1024) c;
+    SELECT a.attachment_id INTO v_att FROM fn_get_ticket_attachments(1, v_ticket, NULL) a;
+    PERFORM pg_temp.ok('a staff user can list the unassigned ticket they raised',
+        (SELECT count(*) = 1 AND bool_and(ticket_id = v_ticket) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, v_s1, 50, 0) WHERE ticket_id = v_ticket));
+    PERFORM pg_temp.ok('... read it, its history, its files and download one',
+        EXISTS (SELECT 1 FROM fn_get_ticket_by_id(1, v_ticket, v_s1)) AND (SELECT count(*) FROM fn_get_ticket_status_history(1, v_ticket, v_s1)) = 1
+        AND (SELECT count(*) FROM fn_get_ticket_attachments(1, v_ticket, v_s1)) = 1 AND (SELECT count(*) FROM fn_get_ticket_attachment(1, v_ticket, v_att, v_s1)) = 1);
+    PERFORM pg_temp.ok('another staff user sees none of it',
+        NOT EXISTS (SELECT 1 FROM fn_get_ticket_by_id(1, v_ticket, v_s2)) AND NOT EXISTS (SELECT 1 FROM fn_get_ticket_status_history(1, v_ticket, v_s2))
+        AND NOT EXISTS (SELECT 1 FROM fn_get_ticket_attachments(1, v_ticket, v_s2)) AND NOT EXISTS (SELECT 1 FROM fn_get_ticket_attachment(1, v_ticket, v_att, v_s2))
+        AND NOT EXISTS (SELECT 1 FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, v_s2, 50, 0) WHERE ticket_id = v_ticket));
+    PERFORM pg_temp.fails('the creator can see it but cannot change its status while it is not theirs (403, not "not found")',
+        format($q$CALL sp_change_ticket_status(1, %s, 'in_progress', NULL, %s, %s)$q$, v_ticket, v_s1, v_s1), '42501');
+    PERFORM pg_temp.ok('the refused change wrote nothing', (SELECT status FROM tickets WHERE ticket_id = v_ticket) = 'open'
+        AND (SELECT count(*) FROM ticket_status_history WHERE ticket_id = v_ticket) = 1);
+    CALL sp_assign_ticket(1, v_ticket, v_s2, v_by, NULL);
+    PERFORM pg_temp.ok('after it is assigned to someone else the creator still reads it and the assignee reads it too',
+        EXISTS (SELECT 1 FROM fn_get_ticket_by_id(1, v_ticket, v_s1)) AND EXISTS (SELECT 1 FROM fn_get_ticket_by_id(1, v_ticket, v_s2)));
+    PERFORM pg_temp.fails('the creator still cannot change it', format($q$CALL sp_change_ticket_status(1, %s, 'in_progress', NULL, %s, %s)$q$, v_ticket, v_s1, v_s1), '42501');
+    CALL sp_change_ticket_status(1, v_ticket, 'in_progress', NULL, v_s2, v_s2);
+    PERFORM pg_temp.ok('the assignee can', (SELECT status FROM tickets WHERE ticket_id = v_ticket) = 'in_progress');
+    PERFORM pg_temp.fails('a staff user who did not raise it and is not assigned still gets "not found"',
+        format($q$CALL sp_change_ticket_status(1, %s, 'resolved', NULL, %s, %s)$q$, v_ticket, pg_temp.ctx('gone'), pg_temp.ctx('gone')), 'P0002');
+    PERFORM pg_temp.ok('a portal ticket (no creator) is never visible through created_by',
+        NOT EXISTS (SELECT 1 FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, v_s1, 50, 0) WHERE ticket_id = pg_temp.ctx('t1')));
+    PERFORM pg_temp.ok('an administrator (no limit) still changes any ticket',
+        (SELECT count(*) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 200, 0) WHERE ticket_id = v_ticket) = 1);
+    CALL sp_change_ticket_status(1, v_ticket, 'resolved', 'Done', v_by, NULL);
+    PERFORM pg_temp.ok('... as an administrator', (SELECT status FROM tickets WHERE ticket_id = v_ticket) = 'resolved');
+END;
+$$;
+
 SELECT count(*) || ' checks passed' AS result FROM t_pass;
 ROLLBACK;
 SELECT count(*) AS tickets_left_behind FROM tickets;
