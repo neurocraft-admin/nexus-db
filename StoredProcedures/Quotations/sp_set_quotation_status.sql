@@ -1,5 +1,6 @@
 -- Moves a quotation to a new status, if the move is allowed, stamps the dates and writes the audit row.
---   draft -> sent        stamps sent_at; refused when valid_until is already past
+--   draft -> sent        stamps sent_at and FREEZES the company details on the quotation (company_snapshot, from fn_company_snapshot): a reprint
+--                        shows what the customer was sent even if the profile changes later; refused when valid_until is already past
 --   draft -> rejected    "delete" of a draft: it stays on record
 --   sent  -> approved    stamps decided_at; refused when valid_until is already past (it is an expired quotation)
 --   sent  -> rejected    stamps decided_at
@@ -30,6 +31,7 @@ BEGIN
     UPDATE quotations
        SET status = p_new_status, updated_at = now(),
            sent_at = CASE WHEN p_new_status = 'sent' THEN now() ELSE sent_at END,
+           company_snapshot = CASE WHEN p_new_status = 'sent' THEN fn_company_snapshot(p_tenant_id) ELSE company_snapshot END,
            decided_at = CASE WHEN p_new_status IN ('approved', 'rejected') THEN now() ELSE decided_at END
      WHERE quotation_id = p_quotation_id AND tenant_id = p_tenant_id;
     CALL sp_log_quotation_status(p_tenant_id, p_quotation_id, v_old, p_new_status, p_changed_by, p_note);

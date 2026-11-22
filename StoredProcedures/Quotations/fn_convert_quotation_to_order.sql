@@ -3,6 +3,8 @@
 -- locked first, so the second call waits, sees 'converted' and is refused naming the order that already exists;
 -- uq_orders_quotation is the safety net behind it. Nothing is deducted: stock only leaves when the order is
 -- fulfilled. Only the lines are copied, so a custom line stays on the order and is skipped at fulfilment.
+-- The extra-charge subtotal (pass-through fees such as KSEB, inside the total) and each line's extra-charge flag are copied, so a report can leave
+-- them out later.
 --   22023 invalid parameter - the quotation has no customer yet: it is for a lead, and converting that lead to a customer
 --                             (fn_convert_lead) sets the customer on the quotation
 --   P0002 not found         - unknown quotation
@@ -14,7 +16,7 @@ DECLARE
     v_q        record;
     v_order_id bigint;
 BEGIN
-    SELECT q.status, q.customer_id, q.total_amount, q.quotation_no INTO v_q FROM quotations q
+    SELECT q.status, q.customer_id, q.total_amount, q.quotation_no, q.extra_charges_amount INTO v_q FROM quotations q
      WHERE q.quotation_id = p_quotation_id AND q.tenant_id = p_tenant_id FOR UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Quotation % not found', p_quotation_id USING ERRCODE = 'P0002';
@@ -32,13 +34,13 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM customers c WHERE c.customer_id = v_q.customer_id AND c.tenant_id = p_tenant_id AND c.is_active) THEN
         RAISE EXCEPTION 'The customer of quotation % is inactive', v_q.quotation_no USING ERRCODE = 'NX409', COLUMN = 'customerId';
     END IF;
-    INSERT INTO orders (tenant_id, order_no, quotation_id, customer_id, total_amount, created_by)
-    VALUES (p_tenant_id, fn_next_document_no(p_tenant_id, 'ORD'), p_quotation_id, v_q.customer_id, v_q.total_amount, p_created_by)
+    INSERT INTO orders (tenant_id, order_no, quotation_id, customer_id, total_amount, extra_charges_amount, created_by)
+    VALUES (p_tenant_id, fn_next_document_no(p_tenant_id, 'ORD'), p_quotation_id, v_q.customer_id, v_q.total_amount, v_q.extra_charges_amount, p_created_by)
     RETURNING orders.order_id INTO v_order_id;
     INSERT INTO order_lines (tenant_id, order_id, line_type, item_id, package_id, description, unit, quantity,
-                             unit_price, line_total, sort_order)
+                             unit_price, line_total, sort_order, is_extra_charge)
     SELECT l.tenant_id, v_order_id, l.line_type, l.item_id, l.package_id, l.description, l.unit, l.quantity,
-           l.unit_price, l.line_total, l.sort_order
+           l.unit_price, l.line_total, l.sort_order, l.is_extra_charge
       FROM quotation_lines l WHERE l.quotation_id = p_quotation_id AND l.tenant_id = p_tenant_id;
     UPDATE quotations SET status = 'converted', updated_at = now() WHERE quotation_id = p_quotation_id AND tenant_id = p_tenant_id;
     CALL sp_log_quotation_status(p_tenant_id, p_quotation_id, 'approved', 'converted', p_created_by, 'Order created');

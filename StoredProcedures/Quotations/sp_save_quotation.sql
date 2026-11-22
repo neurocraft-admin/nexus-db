@@ -1,24 +1,31 @@
 -- One transaction: insert (p_quotation_id NULL) or update a DRAFT quotation and replace all its lines. The server
 -- works out every figure: line_total = round(quantity x unit_price, 2); subtotal = the sum of the line totals;
--- total = subtotal - discount. Returns the id in p_saved_id. A new quotation gets its QTN number here; the number
+-- extra_charges_amount = the sum of the lines flagged as extra charges (pass-through fees such as KSEB: inside the total, outside the customer
+-- payable); total = subtotal - discount. Returns the id in p_saved_id. A new quotation gets its QTN number here; the number
 -- comes from a counter inside this transaction, so a failed save does not use one up. p_lines is described in
 -- sp_check_document_lines. Prices are tax-inclusive and copied onto the quotation.
+-- p_document (optional, the LAST parameter so an older caller that does not pass it keeps working) carries the document settings: see
+-- sp_apply_quotation_document. The discount applies to the customer payable only, never to the extra charges.
 --   22023 invalid parameter - see sp_check_quotation_header and sp_check_document_lines; also a discount above the
---                             subtotal (COLUMN discountAmount)
---   P0002 not found         - unknown quotation, customer, template, item or package
---   NX409 rule conflict     - the quotation is not a draft; an inactive customer, item or package
+--                             customer payable (COLUMN discountAmount), and the document settings rules
+--   P0002 not found         - unknown quotation, customer, template, item, package or datasheet
+--   NX409 rule conflict     - the quotation is not a draft; an inactive customer, item, package or datasheet
 -- The quotation row is locked first, so two saves of one draft queue up instead of mixing their lines.
+DROP PROCEDURE IF EXISTS sp_save_quotation(integer, bigint, bigint, bigint, bigint, date, date, numeric, varchar, varchar, integer, jsonb, bigint);
 CREATE OR REPLACE PROCEDURE sp_save_quotation(
     p_tenant_id integer, p_quotation_id bigint, p_customer_id bigint, p_lead_id bigint, p_template_id bigint,
     p_quotation_date date, p_valid_until date, p_discount_amount numeric, p_terms_text varchar, p_notes varchar,
-    p_created_by integer, p_lines jsonb, OUT p_saved_id bigint)
+    p_created_by integer, p_lines jsonb, OUT p_saved_id bigint, p_document jsonb DEFAULT NULL)
 LANGUAGE plpgsql AS $$
 DECLARE
     v_status   varchar;
     v_subtotal numeric;
+    v_extra    numeric;
+    v_prev_amount numeric;
+    v_prev_over   boolean := false;
 BEGIN
     IF p_quotation_id IS NOT NULL THEN
-        SELECT q.status INTO v_status FROM quotations q
+        SELECT q.status, q.subsidy_amount, q.subsidy_overridden INTO v_status, v_prev_amount, v_prev_over FROM quotations q
          WHERE q.quotation_id = p_quotation_id AND q.tenant_id = p_tenant_id FOR UPDATE;
         IF NOT FOUND THEN
             RAISE EXCEPTION 'Quotation % not found', p_quotation_id USING ERRCODE = 'P0002';
@@ -31,12 +38,16 @@ BEGIN
                                    p_valid_until, p_discount_amount);
     CALL sp_check_document_lines(p_lines);
     CALL sp_check_document_references(p_tenant_id, p_lines);
-    SELECT COALESCE(sum(n.line_total), 0) INTO v_subtotal FROM fn_normalise_document_lines(p_tenant_id, p_lines) n;
-    IF p_discount_amount > v_subtotal THEN
-        RAISE EXCEPTION 'The discount cannot be more than the subtotal' USING ERRCODE = '22023', COLUMN = 'discountAmount';
+    CALL sp_check_line_components(p_tenant_id, p_lines);
+    SELECT COALESCE(sum(n.line_total), 0), COALESCE(sum(n.line_total) FILTER (WHERE n.is_extra_charge), 0) INTO v_subtotal, v_extra
+      FROM fn_normalise_document_lines(p_tenant_id, p_lines) n;
+    IF p_discount_amount > v_subtotal - v_extra THEN
+        RAISE EXCEPTION 'The discount cannot be more than the subtotal%', CASE WHEN v_extra > 0 THEN ' without the extra charges (' || v_extra || ')' ELSE '' END
+            USING ERRCODE = '22023', COLUMN = 'discountAmount';
     END IF;
     CALL sp_write_quotation(p_tenant_id, p_quotation_id, p_customer_id, p_lead_id, p_template_id, p_quotation_date,
-                            p_valid_until, v_subtotal, p_discount_amount, p_terms_text, p_notes, p_created_by,
+                            p_valid_until, v_subtotal, v_extra, p_discount_amount, p_terms_text, p_notes, p_created_by,
                             p_lines, p_saved_id);
+    CALL sp_apply_quotation_document(p_tenant_id, p_saved_id, p_document, v_prev_amount, v_prev_over);
 END;
 $$;

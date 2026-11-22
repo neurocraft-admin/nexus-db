@@ -33,5 +33,6 @@ BEGIN
     CALL sp_check_company_bank(p_profile);
     CALL sp_assert_company_text(p_profile, 'quotationFooterNote', 1000);
     CALL sp_assert_company_text(p_profile, 'quotationTerms', 4000);
+    CALL sp_check_company_defaults(p_profile);
 END;
 $$;
