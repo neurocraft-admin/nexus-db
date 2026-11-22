@@ -445,6 +445,23 @@ BEGIN
 END;
 $$;
 
+-- ---- the item's default make text (set on the item screen) ---------------------------------------------------------------------------------------
+DO $$
+DECLARE
+    v_unit varchar := (SELECT unit_code FROM units WHERE tenant_id = 1 AND is_active ORDER BY unit_code LIMIT 1);
+    v_item bigint;
+BEGIN
+    v_item := fn_save_item(1, NULL, 'QFMAKE1', 'QF make item', v_unit, 0, 100, 0, '  Waaree 25 years  ');
+    PERFORM pg_temp.ok('an item saves its make text trimmed and both reads return it',
+        (SELECT make_text FROM fn_get_item_by_id(1, v_item)) = 'Waaree 25 years'
+        AND (SELECT make_text FROM fn_get_items(1, 'QFMAKE1', false)) = 'Waaree 25 years');
+    PERFORM fn_save_item(1, v_item, 'QFMAKE1', 'QF make item', v_unit, 0, 100, 0, '   ');
+    PERFORM pg_temp.ok('a blank make text clears it', (SELECT make_text FROM fn_get_item_by_id(1, v_item)) IS NULL);
+    PERFORM fn_save_item(1, v_item, 'QFMAKE1', 'QF make item', v_unit, 0, 100, 0);
+    PERFORM pg_temp.ok('the old eight-argument call still works and leaves no make text', (SELECT make_text FROM fn_get_item_by_id(1, v_item)) IS NULL);
+END;
+$$;
+
 -- ---- tenant isolation ----------------------------------------------------------------------------------------------------------------------------
 DO $$
 BEGIN
