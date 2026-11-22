@@ -7,6 +7,6 @@ LANGUAGE sql STABLE AS $$
       FROM ticket_attachments a
       JOIN tickets t ON t.ticket_id = a.ticket_id
      WHERE a.tenant_id = p_tenant_id AND t.tenant_id = p_tenant_id AND a.ticket_id = p_ticket_id
-       AND (p_visible_to IS NULL OR t.assigned_to = p_visible_to)
+       AND (p_visible_to IS NULL OR t.assigned_to = p_visible_to OR t.created_by = p_visible_to)
      ORDER BY a.attachment_id;
 $$;

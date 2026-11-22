@@ -335,7 +335,7 @@ BEGIN
     PERFORM pg_temp.ok('staff 2 has just ticket 3',
         (SELECT count(*) = 1 AND bool_and(ticket_id = v_t3) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, v_s2, 50, 0)));
     PERFORM pg_temp.ok('an admin (no visibility limit) sees all of the tickets',
-        (SELECT count(*) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 50, 0)) = (SELECT count(*) FROM tickets WHERE tenant_id = 1));
+        (SELECT max(total_count) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 0)) = (SELECT count(*) FROM tickets WHERE tenant_id = 1));
     PERFORM pg_temp.ok('staff 1 cannot read ticket 3 (as if it did not exist)', NOT EXISTS (SELECT 1 FROM fn_get_ticket_by_id(1, v_t3, v_s1)));
     PERFORM pg_temp.ok('... nor its history', NOT EXISTS (SELECT 1 FROM fn_get_ticket_status_history(1, v_t3, v_s1)));
     PERFORM pg_temp.ok('... nor its files', NOT EXISTS (SELECT 1 FROM fn_get_ticket_attachments(1, v_t3, v_s1)));
@@ -365,7 +365,7 @@ BEGIN
         AND (SELECT count(*) FROM fn_get_tickets(1, 'active', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 50, 0)) = (SELECT count(*) FROM tickets WHERE status IN ('open', 'in_progress')));
     PERFORM pg_temp.ok('status "closed" lists the closed ones',
         (SELECT count(*) > 0 AND bool_and(status = 'closed') FROM fn_get_tickets(1, 'closed', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 50, 0)));
-    PERFORM pg_temp.ok('the source filter', (SELECT count(*) = 1 AND bool_and(ticket_id = pg_temp.ctx('t6')) FROM fn_get_tickets(1, NULL, NULL, NULL, 'internal', NULL, NULL, NULL, NULL, 50, 0)));
+    PERFORM pg_temp.ok('the source filter', (SELECT count(*) FILTER (WHERE ticket_id = pg_temp.ctx('t6')) = 1 AND bool_and(source = 'internal') FROM fn_get_tickets(1, NULL, NULL, NULL, 'internal', NULL, NULL, NULL, NULL, 10000, 0)));
     PERFORM pg_temp.ok('the assignee filter', (SELECT count(*) = 1 FROM fn_get_tickets(1, NULL, pg_temp.ctx('staff2')::integer, NULL, NULL, NULL, NULL, NULL, NULL, 50, 0)));
     PERFORM pg_temp.ok('the customer filter', (SELECT count(*) = 3 FROM fn_get_tickets(1, NULL, NULL, pg_temp.ctx('c1'), NULL, NULL, NULL, NULL, NULL, 50, 0)));
     PERFORM pg_temp.ok('search by ticket number', (SELECT count(*) = 1 AND bool_and(ticket_id = pg_temp.ctx('t2')) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, pg_temp.no(2), NULL, NULL, NULL, 50, 0)));
@@ -374,7 +374,8 @@ BEGIN
     PERFORM pg_temp.ok('search by issue text', (SELECT count(*) = 1 AND bool_and(ticket_id = pg_temp.ctx('t6')) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, 'strange NOISE', NULL, NULL, NULL, 50, 0)));
     PERFORM pg_temp.ok('a search with % is plain text, not a wildcard', (SELECT count(*) = 0 FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, '%', NULL, NULL, NULL, 50, 0)));
     PERFORM pg_temp.ok('tickets raised today are in a range that includes today',
-        (SELECT count(*) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, current_date - 1, current_date + 1, NULL, 50, 0)) = v_total);
+        (SELECT count(*) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, current_date - 1, current_date + 1, NULL, 100000, 0) WHERE ticket_id >= pg_temp.ctx('t1'))
+        = (SELECT count(*) FROM tickets WHERE tenant_id = 1 AND ticket_id >= pg_temp.ctx('t1')));
     PERFORM pg_temp.ok('a range that starts tomorrow is empty', (SELECT count(*) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, current_date + 1, NULL, NULL, 50, 0)) = 0);
     PERFORM pg_temp.ok('newest first', (SELECT (array_agg(ticket_id ORDER BY ordinality))[1] > (array_agg(ticket_id ORDER BY ordinality))[2]
         FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 50, 0) WITH ORDINALITY));
@@ -449,6 +450,50 @@ BEGIN
     PERFORM pg_temp.fails('a ticket with both an issue type and free text', format($q$UPDATE tickets SET other_issue_text = 'x' WHERE ticket_id = %s$q$, pg_temp.ctx('t7')), '23514', NULL, NULL, 'ck_tickets_issue');
     PERFORM pg_temp.fails('a portal ticket with a creator', format($q$UPDATE tickets SET created_by = %s WHERE ticket_id = %s$q$, pg_temp.ctx('admin'), pg_temp.ctx('t7')), '23514', NULL, NULL, 'ck_tickets_creator');
     PERFORM pg_temp.fails('a description over 500 characters in the table itself', format($q$UPDATE tickets SET description = %L WHERE ticket_id = %s$q$, repeat('x', 501), pg_temp.ctx('t7')), '22001');
+END;
+$$;
+
+-- ---------------------------------------------------------------- a staff user can read the tickets they raised (module 11)
+-- Visibility is "assigned to me OR raised by me"; changing the status stays with the person it is assigned to.
+DO $$
+DECLARE
+    v_s1     integer := pg_temp.ctx('staff1');
+    v_s2     integer := pg_temp.ctx('staff2');
+    v_by     integer := pg_temp.ctx('admin');
+    v_ticket bigint;
+    v_att    bigint;
+BEGIN
+    PERFORM pg_temp.setctx('c8', fn_save_customer(1, NULL, 'Hari Nair', '9876500008', 'Karamana'));
+    SELECT c.ticket_id INTO v_ticket FROM fn_create_ticket(1, pg_temp.ctx('c8'), pg_temp.ctx('it_not_working')::integer, NULL, 'Raised at the front desk',
+        'internal', v_s1, 'photo.pdf', 'a1b2c3d4e5f60718293a4b5c6d7e8f90.pdf', 'application/pdf', 1024) c;
+    SELECT a.attachment_id INTO v_att FROM fn_get_ticket_attachments(1, v_ticket, NULL) a;
+    PERFORM pg_temp.ok('a staff user can list the unassigned ticket they raised',
+        (SELECT count(*) = 1 AND bool_and(ticket_id = v_ticket) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, v_s1, 50, 0) WHERE ticket_id = v_ticket));
+    PERFORM pg_temp.ok('... read it, its history, its files and download one',
+        EXISTS (SELECT 1 FROM fn_get_ticket_by_id(1, v_ticket, v_s1)) AND (SELECT count(*) FROM fn_get_ticket_status_history(1, v_ticket, v_s1)) = 1
+        AND (SELECT count(*) FROM fn_get_ticket_attachments(1, v_ticket, v_s1)) = 1 AND (SELECT count(*) FROM fn_get_ticket_attachment(1, v_ticket, v_att, v_s1)) = 1);
+    PERFORM pg_temp.ok('another staff user sees none of it',
+        NOT EXISTS (SELECT 1 FROM fn_get_ticket_by_id(1, v_ticket, v_s2)) AND NOT EXISTS (SELECT 1 FROM fn_get_ticket_status_history(1, v_ticket, v_s2))
+        AND NOT EXISTS (SELECT 1 FROM fn_get_ticket_attachments(1, v_ticket, v_s2)) AND NOT EXISTS (SELECT 1 FROM fn_get_ticket_attachment(1, v_ticket, v_att, v_s2))
+        AND NOT EXISTS (SELECT 1 FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, v_s2, 50, 0) WHERE ticket_id = v_ticket));
+    PERFORM pg_temp.fails('the creator can see it but cannot change its status while it is not theirs (403, not "not found")',
+        format($q$CALL sp_change_ticket_status(1, %s, 'in_progress', NULL, %s, %s)$q$, v_ticket, v_s1, v_s1), '42501');
+    PERFORM pg_temp.ok('the refused change wrote nothing', (SELECT status FROM tickets WHERE ticket_id = v_ticket) = 'open'
+        AND (SELECT count(*) FROM ticket_status_history WHERE ticket_id = v_ticket) = 1);
+    CALL sp_assign_ticket(1, v_ticket, v_s2, v_by, NULL);
+    PERFORM pg_temp.ok('after it is assigned to someone else the creator still reads it and the assignee reads it too',
+        EXISTS (SELECT 1 FROM fn_get_ticket_by_id(1, v_ticket, v_s1)) AND EXISTS (SELECT 1 FROM fn_get_ticket_by_id(1, v_ticket, v_s2)));
+    PERFORM pg_temp.fails('the creator still cannot change it', format($q$CALL sp_change_ticket_status(1, %s, 'in_progress', NULL, %s, %s)$q$, v_ticket, v_s1, v_s1), '42501');
+    CALL sp_change_ticket_status(1, v_ticket, 'in_progress', NULL, v_s2, v_s2);
+    PERFORM pg_temp.ok('the assignee can', (SELECT status FROM tickets WHERE ticket_id = v_ticket) = 'in_progress');
+    PERFORM pg_temp.fails('a staff user who did not raise it and is not assigned still gets "not found"',
+        format($q$CALL sp_change_ticket_status(1, %s, 'resolved', NULL, %s, %s)$q$, v_ticket, pg_temp.ctx('gone'), pg_temp.ctx('gone')), 'P0002');
+    PERFORM pg_temp.ok('a portal ticket (no creator) is never visible through created_by',
+        NOT EXISTS (SELECT 1 FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, v_s1, 50, 0) WHERE ticket_id = pg_temp.ctx('t1')));
+    PERFORM pg_temp.ok('an administrator (no limit) still changes any ticket',
+        (SELECT count(*) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 200, 0) WHERE ticket_id = v_ticket) = 1);
+    CALL sp_change_ticket_status(1, v_ticket, 'resolved', 'Done', v_by, NULL);
+    PERFORM pg_temp.ok('... as an administrator', (SELECT status FROM tickets WHERE ticket_id = v_ticket) = 'resolved');
 END;
 $$;
 

@@ -1,6 +1,6 @@
 -- One ticket's detail (its history is fn_get_ticket_status_history, its files fn_get_ticket_attachments). No rows when
 -- the ticket does not exist, belongs to another tenant, or is not visible to this user: a staff user (p_visible_to is
--- their id) gets nothing for a ticket assigned to someone else, the same as for one that does not exist, so the API
+-- their id) gets nothing for a ticket that is neither assigned to them nor raised by them, the same as for one that does not exist, so the API
 -- answers 404 for both. created_by is NULL for a ticket raised on the portal.
 CREATE OR REPLACE FUNCTION fn_get_ticket_by_id(p_tenant_id integer, p_ticket_id bigint, p_visible_to integer)
 RETURNS TABLE (ticket_id bigint, ticket_no varchar, customer_id bigint, customer_name varchar, customer_mobile varchar,
@@ -19,5 +19,5 @@ LANGUAGE sql STABLE AS $$
       LEFT JOIN users a ON a.user_id = t.assigned_to
       LEFT JOIN users cb ON cb.user_id = t.created_by
      WHERE t.tenant_id = p_tenant_id AND t.ticket_id = p_ticket_id
-       AND (p_visible_to IS NULL OR t.assigned_to = p_visible_to);
+       AND (p_visible_to IS NULL OR t.assigned_to = p_visible_to OR t.created_by = p_visible_to);
 $$;

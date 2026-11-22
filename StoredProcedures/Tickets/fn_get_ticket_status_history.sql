@@ -1,4 +1,4 @@
--- The timeline of one ticket, oldest first. Empty when the ticket is not visible to this user (see fn_get_ticket_by_id).
+-- The timeline of one ticket, oldest first. Empty when the ticket is not visible to this user (assigned to them or raised by them; see fn_get_ticket_by_id).
 -- A row is either a status change (old_status differs from new_status; the first row has no old_status) or an
 -- assignment (assigned_to is set and the two statuses are the same). changed_by is NULL for a ticket raised on the portal.
 CREATE OR REPLACE FUNCTION fn_get_ticket_status_history(p_tenant_id integer, p_ticket_id bigint, p_visible_to integer)
@@ -11,6 +11,6 @@ LANGUAGE sql STABLE AS $$
       LEFT JOIN users a ON a.user_id = h.assigned_to
       LEFT JOIN users cb ON cb.user_id = h.changed_by
      WHERE h.tenant_id = p_tenant_id AND t.tenant_id = p_tenant_id AND h.ticket_id = p_ticket_id
-       AND (p_visible_to IS NULL OR t.assigned_to = p_visible_to)
+       AND (p_visible_to IS NULL OR t.assigned_to = p_visible_to OR t.created_by = p_visible_to)
      ORDER BY h.history_id;
 $$;

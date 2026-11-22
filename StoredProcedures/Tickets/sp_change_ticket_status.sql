@@ -2,9 +2,11 @@
 -- new status, who, the note). The ticket row is locked first, so two people acting at the same moment are decided one
 -- after the other: the second sees the new status and is refused if its move no longer fits (for example two people
 -- resolving the same ticket). resolved_at is stamped on Resolved and cleared on a reopen; closed_at on Closed.
--- A staff user (p_visible_to is their id) can only change a ticket assigned to them; any other ticket is not found.
+-- A staff user (p_visible_to is their id) can SEE a ticket assigned to them or raised by them, but only the person it is assigned to
+-- can change its status: the creator of someone else's ticket is refused (42501), any other ticket is not found.
 --   22023 invalid parameter - an unknown status, a note over 500 characters, or no note on open -> closed
 --   P0002 not found         - unknown ticket or one outside p_visible_to
+--   42501 not permitted     - a staff user who raised the ticket but is not the person it is assigned to
 --   NX409 rule conflict     - a move that is not allowed (closed is final; reopen only from Resolved); a reopen
 --                             while the customer has another active ticket (the message and HINT give its number)
 CREATE OR REPLACE PROCEDURE sp_change_ticket_status(
@@ -12,15 +14,20 @@ CREATE OR REPLACE PROCEDURE sp_change_ticket_status(
 LANGUAGE plpgsql AS $$
 DECLARE
     v_old_status  varchar;
+    v_assigned_to integer;
     v_customer_id bigint;
     v_note        varchar := NULLIF(btrim(p_note), '');
 BEGIN
-    SELECT t.status INTO v_old_status
+    SELECT t.status, t.assigned_to INTO v_old_status, v_assigned_to
       FROM tickets t
-     WHERE t.ticket_id = p_ticket_id AND t.tenant_id = p_tenant_id AND (p_visible_to IS NULL OR t.assigned_to = p_visible_to)
+     WHERE t.ticket_id = p_ticket_id AND t.tenant_id = p_tenant_id
+       AND (p_visible_to IS NULL OR t.assigned_to = p_visible_to OR t.created_by = p_visible_to)
        FOR UPDATE OF t;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Ticket % not found', p_ticket_id USING ERRCODE = 'P0002';
+    END IF;
+    IF p_visible_to IS NOT NULL AND v_assigned_to IS DISTINCT FROM p_visible_to THEN
+        RAISE EXCEPTION 'Only the person a ticket is assigned to can change its status' USING ERRCODE = '42501';
     END IF;
     CALL sp_check_ticket_status_move(v_old_status, p_new_status, v_note);
     UPDATE tickets
