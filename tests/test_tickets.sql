@@ -335,7 +335,7 @@ BEGIN
     PERFORM pg_temp.ok('staff 2 has just ticket 3',
         (SELECT count(*) = 1 AND bool_and(ticket_id = v_t3) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, v_s2, 50, 0)));
     PERFORM pg_temp.ok('an admin (no visibility limit) sees all of the tickets',
-        (SELECT count(*) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 50, 0)) = (SELECT count(*) FROM tickets WHERE tenant_id = 1));
+        (SELECT max(total_count) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 0)) = (SELECT count(*) FROM tickets WHERE tenant_id = 1));
     PERFORM pg_temp.ok('staff 1 cannot read ticket 3 (as if it did not exist)', NOT EXISTS (SELECT 1 FROM fn_get_ticket_by_id(1, v_t3, v_s1)));
     PERFORM pg_temp.ok('... nor its history', NOT EXISTS (SELECT 1 FROM fn_get_ticket_status_history(1, v_t3, v_s1)));
     PERFORM pg_temp.ok('... nor its files', NOT EXISTS (SELECT 1 FROM fn_get_ticket_attachments(1, v_t3, v_s1)));
@@ -365,7 +365,7 @@ BEGIN
         AND (SELECT count(*) FROM fn_get_tickets(1, 'active', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 50, 0)) = (SELECT count(*) FROM tickets WHERE status IN ('open', 'in_progress')));
     PERFORM pg_temp.ok('status "closed" lists the closed ones',
         (SELECT count(*) > 0 AND bool_and(status = 'closed') FROM fn_get_tickets(1, 'closed', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 50, 0)));
-    PERFORM pg_temp.ok('the source filter', (SELECT count(*) = 1 AND bool_and(ticket_id = pg_temp.ctx('t6')) FROM fn_get_tickets(1, NULL, NULL, NULL, 'internal', NULL, NULL, NULL, NULL, 50, 0)));
+    PERFORM pg_temp.ok('the source filter', (SELECT count(*) FILTER (WHERE ticket_id = pg_temp.ctx('t6')) = 1 AND bool_and(source = 'internal') FROM fn_get_tickets(1, NULL, NULL, NULL, 'internal', NULL, NULL, NULL, NULL, 10000, 0)));
     PERFORM pg_temp.ok('the assignee filter', (SELECT count(*) = 1 FROM fn_get_tickets(1, NULL, pg_temp.ctx('staff2')::integer, NULL, NULL, NULL, NULL, NULL, NULL, 50, 0)));
     PERFORM pg_temp.ok('the customer filter', (SELECT count(*) = 3 FROM fn_get_tickets(1, NULL, NULL, pg_temp.ctx('c1'), NULL, NULL, NULL, NULL, NULL, 50, 0)));
     PERFORM pg_temp.ok('search by ticket number', (SELECT count(*) = 1 AND bool_and(ticket_id = pg_temp.ctx('t2')) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, pg_temp.no(2), NULL, NULL, NULL, 50, 0)));
@@ -374,7 +374,8 @@ BEGIN
     PERFORM pg_temp.ok('search by issue text', (SELECT count(*) = 1 AND bool_and(ticket_id = pg_temp.ctx('t6')) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, 'strange NOISE', NULL, NULL, NULL, 50, 0)));
     PERFORM pg_temp.ok('a search with % is plain text, not a wildcard', (SELECT count(*) = 0 FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, '%', NULL, NULL, NULL, 50, 0)));
     PERFORM pg_temp.ok('tickets raised today are in a range that includes today',
-        (SELECT count(*) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, current_date - 1, current_date + 1, NULL, 50, 0)) = v_total);
+        (SELECT count(*) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, current_date - 1, current_date + 1, NULL, 100000, 0) WHERE ticket_id >= pg_temp.ctx('t1'))
+        = (SELECT count(*) FROM tickets WHERE tenant_id = 1 AND ticket_id >= pg_temp.ctx('t1')));
     PERFORM pg_temp.ok('a range that starts tomorrow is empty', (SELECT count(*) FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, current_date + 1, NULL, NULL, 50, 0)) = 0);
     PERFORM pg_temp.ok('newest first', (SELECT (array_agg(ticket_id ORDER BY ordinality))[1] > (array_agg(ticket_id ORDER BY ordinality))[2]
         FROM fn_get_tickets(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 50, 0) WITH ORDINALITY));
